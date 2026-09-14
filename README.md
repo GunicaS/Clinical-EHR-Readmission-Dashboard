@@ -13,7 +13,7 @@ End-to-end healthcare analytics pipeline modeling 73k+ Synthea EHR encounters. B
 
 Hospital readmissions within 30 days of discharge serve as a critical benchmark for clinical quality, patient care transitions, and resource allocation. This report evaluates readmission patterns across Minnesota counties using synthetic Electronic Health Record (EHR) data.
 
-Out of **73,406 distinct patient encounters**, the baseline 30-day readmission rate is **44.0%**. Empirical analysis of clinical and social drivers reveals that readmissions are heavily concentrated around specific behavioral, psychosocial, and cardiovascular conditions. **Gingivitis**, **Overdose**, and acute **Myocardial Infarction** lead primary clinical diagnoses, while **Stress**, employment conditions, and social isolation serve as top non-clinical findings. County-level filtering ($n \ge 30$) demonstrates that rural counties—led by **Houston County (76%)**, **Morrison County (72%)**, and **Fillmore County (70%)**—exhibit the highest relative readmission rates statewide.
+Out of **73,406 distinct patient encounters**, the baseline 30-day readmission rate is **44.0%**. Empirical analysis of clinical and social drivers reveals that readmissions are heavily concentrated around specific behavioral, psychosocial, and cardiovascular conditions. **Gingivitis**, **Overdose**, and acute **Myocardial Infarction** lead primary clinical diagnoses, while **Stress**, employment conditions, and social isolation serve as top non-clinical findings. County-level filtering ($n \ge 30$) demonstrates that rural counties led by **Houston County (76%)**, **Morrison County (72%)**, and **Fillmore County (70%)** exhibit the highest relative readmission rates statewide.
 
 ---
 
