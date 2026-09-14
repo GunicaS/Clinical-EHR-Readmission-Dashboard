@@ -1,0 +1,193 @@
+---
+title: "Synthea EHR Analysis"
+author: Gunica Sharma
+output: pdf_document
+date: "2026-08-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Data Loading
+
+```{r Data Loading}
+
+library(tidyverse)
+
+#Load in Data
+ehr_data <- read_csv("final_readmission_cohort.csv")
+
+#double check data load
+glimpse(ehr_data)
+```
+
+### Convert Variables to Factors and Create a Summary Table
+
+```{r Convert Variables to Factors and Create a Summary Table}
+
+#Convert binary and categorical variables into factors
+ehr_clean <- ehr_data %>%
+  mutate(
+    is_30d_readmission = as.factor(is_30d_readmission),
+    GENDER = as.factor(gender),
+    COUNTY = as.factor(county),
+    CITY = as.factor(city),
+    DIAGNOSIS = as.factor(primary_diagnosis)
+  )
+
+#Summary of data with variables as factor
+summary(ehr_clean)
+```
+
+### Summary Table with Gender and Demography
+
+```{r Summary Table with Gender and Demography}
+
+## Summary Table with Gender and Demography
+
+library(gtsummary)
+
+#Build the stratified summary table
+ehr_clean %>%
+  #Select the specific columns in the summary
+  select(age_at_admission, GENDER, COUNTY, procedure_count, length_of_stay, is_30d_readmission) %>%
+  #Group by if they were readmitted
+  tbl_summary(by = is_30d_readmission) %>%
+  #Add p-values to compare
+  add_p()
+```
+
+
+### Top 15 Clinical Drivers of Readmission Graph
+
+```{r Top 15 Clinical Drivers of Readmission Graph, fig.width=5, fig.height=3.5, fig.align="center"}
+library(ggplot2)
+library(stringr)
+
+#Top 15 Clinical Drivers of Readmission
+ehr_clean %>%
+  #Step 1: Filter for patients who were readmitted
+  filter(is_30d_readmission == "1") %>%
+  
+  #Step 2: Remove missing data and NULL
+  drop_na(DIAGNOSIS) %>%
+  filter(DIAGNOSIS != "NULL") %>%
+  
+  #Step 3: Filter out Social Health determinants and administrative noise
+  filter(!str_detect(str_to_lower(DIAGNOSIS), "review|employment|labor|social|violence|finding|situation|routine|normal")) %>%
+  
+  #Step 4: Count the number of occurrences of each specific diagnosis
+  count(DIAGNOSIS, name = "readmission_count") %>%
+  
+  #Step 5: Keep only the top 15 most frequent conditions
+  slice_max(order_by = readmission_count, n = 15) %>%
+  
+  #Step 6: Build the plot
+  ggplot(aes(x = reorder(DIAGNOSIS, readmission_count), y = readmission_count)) +
+  geom_col(fill = "turquoise3") +
+  coord_flip() +
+  labs(
+    title = "Top 15 Clinical Drivers of 30-Day Readmissions",
+    x = "Primary Diagnosis",
+    y = "Total Number of Readmissions"
+  ) +
+  scale_y_discrete(labels = \(x) str_wrap(x, width = 30)) +
+  theme_minimal()
+```
+
+### Top 15 Social Drivers of Readmission Graph
+
+```{r Top 15 Social Drivers of Readmission Graph}
+
+#The Social Determinants Plot: Non-Clinical Drivers of Readmission
+ehr_clean %>%
+  #Step 1: Filter for patients who were readmitted
+  filter(is_30d_readmission == "1") %>%
+  
+  #Step 2: Remove missing data and NULL
+  drop_na(DIAGNOSIS) %>%
+  filter(DIAGNOSIS != "NULL") %>%
+  
+  #Step 3: Drop the medication review (non clinical and not readmission)
+  filter(!str_detect(str_to_lower(DIAGNOSIS), "medication review")) %>%
+  
+  #Step 4: Filter the social and administrative findings
+  filter(str_detect(str_to_lower(DIAGNOSIS), "employment|labor|social|stress|finding|situation")) %>%
+  
+  #Step 5: Count and slice the top 15
+  count(DIAGNOSIS, name = "readmission_count") %>%
+  slice_max(order_by = readmission_count, n = 15) %>%
+  
+  #Step 6: Build the plot 
+  ggplot(aes(x = reorder(DIAGNOSIS, readmission_count), y = readmission_count)) +
+  geom_col(fill = "darkorange") +
+  coord_flip() +
+  labs(
+    title = "Top 15 Social & Administrative Drivers of 30-Day Readmissions",
+    x = "Social Determinant / Finding",
+    y = "Total Number of Readmissions"
+  ) +
+  theme_minimal()
+```
+### Highest Readmission Rate by County Graph
+
+```{r Highest Readmission Rate by County Graph}
+
+#Load the scales package to format our axis as percentages
+library(scales)
+
+ehr_clean %>%
+  #Step 1: Remove missing county data
+  drop_na(COUNTY) %>%
+  
+  #Step 2: Group the data by County
+  group_by(COUNTY) %>%
+  
+  #Step 3: Calculate totals and relative frequencies (percentages)
+  summarize(
+    total_visits = n(),
+    readmitted_count = sum(is_30d_readmission == "1"),
+    readmission_rate = readmitted_count / total_visits
+  ) %>%
+  
+  #Step 4: The Sample Size Filter
+  #Drop any county with fewer than 30 total visits to eliminate statistical noise
+  filter(total_visits >= 30) %>%
+  
+  #Step 5: Keep the top 15 counties with the highest readmission rates
+  slice_max(order_by = readmission_rate, n = 15) %>%
+  
+  #Step 6: Build the plot
+  ggplot(aes(x = reorder(COUNTY, readmission_rate), y = readmission_rate)) +
+  geom_col(fill = "slategray") +
+  coord_flip() +
+  
+  #Format the Y-axis (which is flipped to the bottom) as percentages
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title = "Highest 30-Day Readmission Rates by County",
+    subtitle = "Filtered for counties with n >= 30 hospital visits",
+    x = "County",
+    y = "Relative Readmission Rate (%)"
+  ) +
+  theme_minimal()
+```
+### Logistic Regression Model
+
+```{r Logistic Regression Model}
+
+library(broom)
+
+#Step 1: Build the Logistic Regression Model
+#Testing if readmission is driven by Age and Gender
+readmission_model <- glm(
+  is_30d_readmission ~ age_at_admission + GENDER, 
+  data = ehr_clean, 
+  family = "binomial" #This tells R it's a Yes/No (1 or 0) outcome
+)
+
+#Step 2: Tidy the results and calculate the Odds Ratios with CI
+tidy(readmission_model, exponentiate = TRUE, conf.int = TRUE)
+```
+
